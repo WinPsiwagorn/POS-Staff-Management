@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { PALETTE, REQUEST_TYPES, TABLE_BY_ID, TABLE_BY_OBJECT_ID, COOLDOWN_MS } from '@/lib/constants';
+import { PALETTE, REQUEST_TYPES, TABLE_BY_ID, COOLDOWN_MS } from '@/lib/constants';
 import { createCall, getActiveCalls } from '@/lib/api';
+import { asCallArray, mergeUniqueCalls } from '@/lib/callUtils';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
   IcBell, IcCheck, IcUser, IcClock, IcChat,
@@ -20,7 +21,7 @@ function elapsedString(isoDate: string, now: number): string {
 }
 
 function useNow() {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -162,7 +163,7 @@ function CustomerStatusCard({ call, now, onCancel }: { call: Call; now: number; 
           fontSize: 13, color: '#fff', fontStyle: 'italic',
           border: '1px solid rgba(255,255,255,0.18)',
         }}>
-          "{call.special_request}"
+          &ldquo;{call.special_request}&rdquo;
         </div>
       )}
     </div>
@@ -208,7 +209,6 @@ function SpecialRequestSheet({ open, onClose, onSubmit }: {
   onSubmit: (note: string) => void;
 }) {
   const [note, setNote] = useState('');
-  useEffect(() => { if (open) setNote(''); }, [open]);
   if (!open) return null;
   return (
     <div style={{
@@ -294,7 +294,11 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
   useEffect(() => {
     if (!table) return;
     getActiveCalls()
-      .then(calls => setActiveCalls(calls.filter(c => c.table_id === table.objectId)))
+      .then(calls => setActiveCalls(
+        mergeUniqueCalls(
+          asCallArray(calls).filter(c => c.table_id === table.objectId)
+        )
+      ))
       .catch(console.error);
   }, [table]);
 
@@ -302,9 +306,9 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
   useWebSocket(useCallback(({ type, payload }) => {
     if (!table || payload.table_id !== table.objectId) return;
     if (type === 'call_created') {
-      setActiveCalls(cs => cs.some(c => c.id === payload.id) ? cs : [...cs, payload]);
+      setActiveCalls(cs => mergeUniqueCalls([...cs, payload]));
     } else if (type === 'call_assigned') {
-      setActiveCalls(cs => cs.map(c => c.id === payload.id ? payload : c));
+      setActiveCalls(cs => mergeUniqueCalls(cs.map(c => c.id === payload.id ? payload : c)));
     } else if (type === 'call_resolved') {
       setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
       setRecentlyResolved(true);
@@ -471,6 +475,7 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
       </div>
 
       <SpecialRequestSheet
+        key={sheetOpen ? 'sheet-open' : 'sheet-closed'}
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         onSubmit={onSubmitNote}

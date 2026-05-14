@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getActiveCalls, assignCall, resolveCall } from '@/lib/api';
+import { asCallArray, mergeUniqueCalls } from '@/lib/callUtils';
 import { useWebSocket } from './useWebSocket';
 import { TABLE_BY_OBJECT_ID, DEFAULT_STAFF, RESOLVED_TTL_MS } from '@/lib/constants';
 import type { Call, TableGroup, TableState, Toast } from '@/lib/types';
@@ -44,7 +45,7 @@ export function useCallStore() {
   useEffect(() => {
     getActiveCalls()
       .then(calls => {
-        const safe = calls ?? [];
+        const safe = mergeUniqueCalls(asCallArray(calls));
         setActiveCalls(safe);
         safe.forEach(c => seenIds.current.add(c.id));
       })
@@ -78,16 +79,16 @@ export function useCallStore() {
     if (type === 'call_created') {
       if (!seenIds.current.has(payload.id)) {
         seenIds.current.add(payload.id);
-        setActiveCalls(cs => [...cs, payload]);
+        setActiveCalls(cs => mergeUniqueCalls([...cs, payload]));
         pushToast(payload);
       }
     } else if (type === 'call_assigned') {
       setActiveCalls(cs =>
-        cs.map(c => c.id === payload.id ? payload : c)
+        mergeUniqueCalls(cs.map(c => c.id === payload.id ? payload : c))
       );
     } else if (type === 'call_resolved') {
       setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
-      setResolvedCalls(rs => [payload, ...rs]);
+      setResolvedCalls(rs => mergeUniqueCalls([payload, ...rs]));
     }
   }, [pushToast]));
 
@@ -111,7 +112,7 @@ export function useCallStore() {
     try {
       const updated = await resolveCall(callId);
       setActiveCalls(cs => cs.filter(c => c.id !== updated.id));
-      setResolvedCalls(rs => [updated, ...rs]);
+      setResolvedCalls(rs => mergeUniqueCalls([updated, ...rs]));
     } catch (e) {
       console.error(e);
     }

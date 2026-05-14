@@ -23,7 +23,7 @@ function elapsedSince(isoDate: string, now: number): number {
 }
 
 function useNow() {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
   React.useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
