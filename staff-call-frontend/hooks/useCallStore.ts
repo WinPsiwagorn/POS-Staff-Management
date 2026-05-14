@@ -44,8 +44,9 @@ export function useCallStore() {
   useEffect(() => {
     getActiveCalls()
       .then(calls => {
-        setActiveCalls(calls);
-        calls.forEach(c => seenIds.current.add(c.id));
+        const safe = calls ?? [];
+        setActiveCalls(safe);
+        safe.forEach(c => seenIds.current.add(c.id));
       })
       .catch(console.error);
   }, []);
