@@ -25,3 +25,4 @@ export default function CustomerPageInner() {
 
 // http://localhost:3000/customer?table=BAR
 // http://localhost:3000/customer?table=B01
+// http://192.168.1.100:3000/customer?table=B01
