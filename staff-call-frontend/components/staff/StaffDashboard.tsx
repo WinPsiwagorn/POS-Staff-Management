@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { PALETTE, TABLES, TABLE_BY_OBJECT_ID, REQUEST_TYPE_BY_BACKEND } from '@/lib/constants';
 import { useCallStore } from '@/hooks/useCallStore';
-import { playAlertSound } from '@/lib/alertSound';
+import { initializeAlertSound, playAlertSound, setAlertSoundMuted } from '@/lib/alertSound';
 import {
   IcBell, IcCheck, IcUser, IcSound, IcMute, IcX,
   ICON_BY_TYPE,
@@ -834,6 +834,14 @@ export default function StaffDashboard() {
   const now = useNow();
 
   const focusedGroup = focusedObjectId ? groups.find(g => g.objectId === focusedObjectId) : undefined;
+
+  useEffect(() => {
+    initializeAlertSound();
+  }, []);
+
+  useEffect(() => {
+    setAlertSoundMuted(muted);
+  }, [muted]);
 
   // Play alert sound for each new toast, unless muted
   const seenToastIds = useRef<Set<string>>(new Set());
