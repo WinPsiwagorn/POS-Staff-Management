@@ -197,3 +197,43 @@ func (h *CallHandler) ResolveCall(
 		"data":    call,
 	})
 }
+
+func (h *CallHandler) CancelCall(
+	c *fiber.Ctx,
+) error {
+
+	callIDParam := c.Params("id")
+
+	callID, err := primitive.ObjectIDFromHex(callIDParam)
+
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "Invalid call ID",
+		})
+	}
+
+	call, err := h.callService.CancelCall(
+		c.UserContext(),
+		callID,
+	)
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": err.Error(),
+		})
+	}
+
+	if call == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"success": false,
+			"message": "Call cannot be cancelled",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    call,
+	})
+}

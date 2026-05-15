@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { PALETTE, REQUEST_TYPES, TABLE_BY_ID, COOLDOWN_MS } from '@/lib/constants';
-import { createCall, getActiveCalls } from '@/lib/api';
+import { cancelCall, createCall, getActiveCalls } from '@/lib/api';
 import { asCallArray, mergeUniqueCalls } from '@/lib/callUtils';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
@@ -314,6 +314,8 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
       setRecentlyResolved(true);
       clearTimeout(resolvedTimerRef.current);
       resolvedTimerRef.current = setTimeout(() => setRecentlyResolved(false), 4000);
+    } else if (type === 'call_cancelled') {
+      setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
     }
   }, [table]));
 
@@ -356,6 +358,15 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
         type: 'special',
         special_request: note,
       });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const onCancel = async (callId: string) => {
+    try {
+      await cancelCall(callId);
+      setActiveCalls(cs => cs.filter(c => c.id !== callId));
     } catch (e) {
       console.error(e);
     }
@@ -431,7 +442,7 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
       {activeCall && (
         <CustomerStatusCard
           call={activeCall} now={now}
-          onCancel={() => setActiveCalls(cs => cs.filter(c => c.id !== activeCall.id))}
+          onCancel={() => onCancel(activeCall.id)}
         />
       )}
 

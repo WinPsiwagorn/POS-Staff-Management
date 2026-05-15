@@ -3,8 +3,25 @@ import { asCallArray } from './callUtils';
 import { getApiBaseUrl } from './network';
 
 async function json<T>(res: Response): Promise<T> {
-  const body = await res.json();
-  if (!res.ok) throw new Error(body?.message ?? res.statusText);
+  const raw = await res.text();
+  let body: { data?: T; message?: string } | null = null;
+
+  if (raw) {
+    try {
+      body = JSON.parse(raw) as { data?: T; message?: string };
+    } catch {
+      body = null;
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error(body?.message ?? (raw || res.statusText));
+  }
+
+  if (!body || !('data' in body)) {
+    throw new Error(raw || 'Invalid API response');
+  }
+
   return body.data as T;
 }
 
@@ -41,4 +58,28 @@ export async function resolveCall(callId: string): Promise<Call> {
     method: 'PATCH',
   });
   return json<Call>(res);
+}
+
+export async function cancelCall(callId: string): Promise<Call> {
+  const cancelRes = await fetch(`${getApiBaseUrl()}/api/calls/${callId}/cancel`, {
+    method: 'PATCH',
+  });
+
+  if (cancelRes.ok) {
+    return json<Call>(cancelRes);
+  }
+
+  const cancelText = await cancelRes.clone().text();
+  const routeMissing = cancelRes.status === 404
+    || cancelRes.status === 405
+    || cancelText.includes('Cannot PATCH');
+
+  if (!routeMissing) {
+    return json<Call>(cancelRes);
+  }
+
+  const resolveRes = await fetch(`${getApiBaseUrl()}/api/calls/${callId}/resolve`, {
+    method: 'PATCH',
+  });
+  return json<Call>(resolveRes);
 }

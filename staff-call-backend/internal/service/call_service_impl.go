@@ -145,3 +145,27 @@ func (s *callService) ResolveCall(
 	return call, nil
 }
 
+func (s *callService) CancelCall(
+	ctx context.Context,
+	callID primitive.ObjectID,
+) (*models.Call, error) {
+
+	call, err := s.callRepo.CancelCall(
+		ctx,
+		callID,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if call != nil {
+		websocket.HubInstance.Broadcast <- websocket.Event{
+			Type:    "call_cancelled",
+			Payload: call,
+		}
+	}
+
+	return call, nil
+}
+

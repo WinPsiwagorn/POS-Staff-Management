@@ -89,6 +89,8 @@ export function useCallStore() {
     } else if (type === 'call_resolved') {
       setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
       setResolvedCalls(rs => mergeUniqueCalls([payload, ...rs]));
+    } else if (type === 'call_cancelled') {
+      setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
     }
   }, [pushToast]));
 

@@ -37,4 +37,6 @@ func SetupRoutes(app *fiber.App) {
 	calls.Patch("/:id/assign", callHandler.AssignCall)
 
 	calls.Patch("/:id/resolve", callHandler.ResolveCall)
+
+	calls.Patch("/:id/cancel", callHandler.CancelCall)
 }

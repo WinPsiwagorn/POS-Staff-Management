@@ -31,4 +31,9 @@ type CallService interface {
 	callID primitive.ObjectID,
 ) (*models.Call, error)
 
+	CancelCall(
+	ctx context.Context,
+	callID primitive.ObjectID,
+) (*models.Call, error)
+
 }

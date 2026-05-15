@@ -38,7 +38,7 @@ func (r *callRepositoryMongo) FindActive(
 
 	filter := bson.M{
 		"status": bson.M{
-			"$ne": "resolved",
+			"$nin": bson.A{"resolved", "cancelled"},
 		},
 	}
 
@@ -156,6 +156,48 @@ func (r *callRepositoryMongo) ResolveCall(
 		"$set": bson.M{
 			"status":      "resolved",
 			"resolved_at": now,
+		},
+	}
+
+	opts := options.FindOneAndUpdate().
+		SetReturnDocument(options.After)
+
+	var updatedCall models.Call
+
+	err := r.collection.FindOneAndUpdate(
+		ctx,
+		filter,
+		update,
+		opts,
+	).Decode(&updatedCall)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return &updatedCall, nil
+}
+
+func (r *callRepositoryMongo) CancelCall(
+	ctx context.Context,
+	callID primitive.ObjectID,
+) (*models.Call, error) {
+
+	now := time.Now()
+
+	filter := bson.M{
+		"_id":    callID,
+		"status": "pending",
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"status":       "cancelled",
+			"cancelled_at": now,
 		},
 	}
 
