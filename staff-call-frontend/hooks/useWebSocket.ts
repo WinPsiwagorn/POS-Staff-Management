@@ -5,7 +5,7 @@ import type { Call } from '@/lib/types';
 import { getWsBaseUrl } from '@/lib/network';
 
 export interface WSEvent {
-  type: 'call_created' | 'call_assigned' | 'call_resolved' | 'call_cancelled';
+  type: 'call_created' | 'call_assigned' | 'call_resolved' | 'call_cancelled' | 'call_no_longer_needed';
   payload: Call;
 }
 

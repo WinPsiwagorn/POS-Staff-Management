@@ -38,7 +38,7 @@ func (r *callRepositoryMongo) FindActive(
 
 	filter := bson.M{
 		"status": bson.M{
-			"$nin": bson.A{"resolved", "cancelled"},
+			"$nin": bson.A{"resolved", "cancelled", "no_longer_needed"},
 		},
 	}
 
@@ -148,7 +148,7 @@ func (r *callRepositoryMongo) ResolveCall(
 	filter := bson.M{
 		"_id": callID,
 		"status": bson.M{
-			"$ne": "resolved",
+			"$nin": bson.A{"resolved", "cancelled", "no_longer_needed"},
 		},
 	}
 
@@ -189,18 +189,6 @@ func (r *callRepositoryMongo) CancelCall(
 
 	now := time.Now()
 
-	filter := bson.M{
-		"_id":    callID,
-		"status": "pending",
-	}
-
-	update := bson.M{
-		"$set": bson.M{
-			"status":       "cancelled",
-			"cancelled_at": now,
-		},
-	}
-
 	opts := options.FindOneAndUpdate().
 		SetReturnDocument(options.After)
 
@@ -208,8 +196,39 @@ func (r *callRepositoryMongo) CancelCall(
 
 	err := r.collection.FindOneAndUpdate(
 		ctx,
-		filter,
-		update,
+		bson.M{
+			"_id":    callID,
+			"status": "pending",
+		},
+		bson.M{
+			"$set": bson.M{
+				"status":       "cancelled",
+				"cancelled_at": now,
+			},
+		},
+		opts,
+	).Decode(&updatedCall)
+
+	if err == nil {
+		return &updatedCall, nil
+	}
+
+	if err != mongo.ErrNoDocuments {
+		return nil, err
+	}
+
+	err = r.collection.FindOneAndUpdate(
+		ctx,
+		bson.M{
+			"_id":    callID,
+			"status": "assigned",
+		},
+		bson.M{
+			"$set": bson.M{
+				"status":              "no_longer_needed",
+				"no_longer_needed_at": now,
+			},
+		},
 		opts,
 	).Decode(&updatedCall)
 

@@ -1,4 +1,4 @@
-export type CallStatus = 'pending' | 'assigned' | 'resolved' | 'cancelled';
+export type CallStatus = 'pending' | 'assigned' | 'resolved' | 'cancelled' | 'no_longer_needed';
 export type CallTypeId = 'server' | 'refill' | 'bill' | 'order' | 'special' | 'urgent';
 export type TableState = 'idle' | 'inCall' | 'urgent' | 'inProgress';
 export type FilterTab = 'inCall' | 'inProgress' | 'resolved';
@@ -17,6 +17,7 @@ export interface Call {
   assigned_at?: string;
   resolved_at?: string;
   cancelled_at?: string;
+  no_longer_needed_at?: string;
 }
 
 export interface TableDef {
@@ -59,4 +60,5 @@ export interface Toast {
   label: string;
   urgent: boolean;
   typeId: string;
+  silent?: boolean;
 }

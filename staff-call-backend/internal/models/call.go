@@ -27,4 +27,5 @@ type Call struct {
 	AssignedAt *time.Time `bson:"assigned_at,omitempty" json:"assigned_at,omitempty"`
 	ResolvedAt *time.Time `bson:"resolved_at,omitempty" json:"resolved_at,omitempty"`
 	CancelledAt *time.Time `bson:"cancelled_at,omitempty" json:"cancelled_at,omitempty"`
+	NoLongerNeededAt *time.Time `bson:"no_longer_needed_at,omitempty" json:"no_longer_needed_at,omitempty"`
 }

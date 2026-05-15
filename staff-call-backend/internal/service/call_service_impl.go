@@ -160,8 +160,13 @@ func (s *callService) CancelCall(
 	}
 
 	if call != nil {
+		eventType := "call_cancelled"
+		if call.Status == "no_longer_needed" {
+			eventType = "call_no_longer_needed"
+		}
+
 		websocket.HubInstance.Broadcast <- websocket.Event{
-			Type:    "call_cancelled",
+			Type:    eventType,
 			Payload: call,
 		}
 	}

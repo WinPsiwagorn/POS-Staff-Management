@@ -23,6 +23,10 @@ function elapsedSince(isoDate: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(isoDate).getTime()) / 1000));
 }
 
+function getTerminalIso(call: Call): string {
+  return call.resolved_at ?? call.cancelled_at ?? call.no_longer_needed_at ?? call.created_at;
+}
+
 function useNow() {
   const [now, setNow] = useState(0);
   React.useEffect(() => {
@@ -49,7 +53,7 @@ function FilterTabs({ value, onChange, counts }: {
   const tabs: { id: FilterTab; label: string; accent: string }[] = [
     { id: 'inCall',     label: 'In Call',     accent: PALETTE.rust       },
     { id: 'inProgress', label: 'In Progress', accent: PALETTE.terracotta },
-    { id: 'resolved',   label: 'Resolved',    accent: PALETTE.sandDeep   },
+    { id: 'resolved',   label: 'Recent',      accent: PALETTE.sandDeep   },
   ];
   return (
     <div style={{
@@ -297,10 +301,16 @@ function ResolvedLogRow({ call, now }: { call: Call; now: number }) {
   const Icon = ICON_BY_TYPE[call.type] ?? IcBell;
   const typeDef = REQUEST_TYPE_BY_BACKEND[call.type];
   const table = TABLE_BY_OBJECT_ID[call.table_id];
-  const secsAgo = elapsedSince(call.resolved_at!, now);
+  const terminalIso = getTerminalIso(call);
+  const secsAgo = elapsedSince(terminalIso, now);
   const timeAgo = secsAgo < 60 ? `${secsAgo}s ago`
     : secsAgo < 3600 ? `${Math.floor(secsAgo / 60)}m ago`
     : `${Math.floor(secsAgo / 3600)}h ago`;
+  const statusLabel = call.status === 'cancelled'
+    ? 'Cancelled by guest'
+    : call.status === 'no_longer_needed'
+      ? 'No longer needed'
+      : 'Resolved';
 
   return (
     <div style={{
@@ -325,6 +335,7 @@ function ResolvedLogRow({ call, now }: { call: Call; now: number }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: PALETTE.ink, fontSize: 12.5 }}>
           <Icon size={13} stroke={PALETTE.ink} sw={1.9}/>
           <span style={{ fontWeight: 600 }}>{typeDef?.label ?? call.type}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: PALETTE.ink2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{statusLabel}</span>
           {call.special_request && (
             <span style={{ color: PALETTE.ink2, fontStyle: 'italic', opacity: .85 }}>· "{call.special_request}"</span>
           )}
@@ -340,7 +351,7 @@ function EmptyState({ filter }: { filter: FilterTab }) {
   const copy: Record<FilterTab, { title: string; sub: string }> = {
     inCall:     { title: 'No incoming calls',      sub: 'Your floor is clear. New alerts will appear here.'      },
     inProgress: { title: 'Nothing in progress',    sub: 'Acknowledged requests will move here.'                  },
-    resolved:   { title: 'No resolved calls yet',  sub: 'When you resolve a table, it appears here as a record.' },
+    resolved:   { title: 'No recent updates yet',  sub: 'Resolved requests and guest withdrawals appear here.' },
   };
   const { title, sub } = copy[filter];
   return (
@@ -377,7 +388,7 @@ function Queue({ groups, resolvedCalls, filter, now, focusedObjectId, setFocused
   }), [visible]);
 
   const showResolved = filter === 'resolved';
-  const headingLabel = filter === 'inCall' ? 'Needs attention' : filter === 'inProgress' ? 'Being handled' : 'Resolved log';
+  const headingLabel = filter === 'inCall' ? 'Needs attention' : filter === 'inProgress' ? 'Being handled' : 'Recent activity';
 
   return (
     <div style={{
@@ -850,7 +861,9 @@ export default function StaffDashboard() {
     toasts.forEach(t => {
       if (!seenToastIds.current.has(t.id)) {
         seenToastIds.current.add(t.id);
-        playAlertSound(t.urgent);
+        if (!t.silent) {
+          playAlertSound(t.urgent);
+        }
       }
     });
   }, [toasts, muted]);

@@ -31,14 +31,16 @@ function useNow() {
 
 // ── Request button ────────────────────────────────────────────────
 
-function RequestButton({ type, cooldown, onPick }: {
+function RequestButton({ type, cooldown, busy, onPick }: {
   type: RequestTypeDef;
   cooldown: number;
+  busy: boolean;
   onPick: (id: string) => void;
 }) {
   const Icon = ICON_BY_TYPE[type.id] ?? IcBell;
   const isUrgent = type.id === 'urgent';
   const isCooling = cooldown > 0;
+  const isDisabled = isCooling || busy;
 
   let bg: string, fg: string, iconBg: string, iconFg: string, sub: string, shadow: string, border: string;
 
@@ -58,8 +60,8 @@ function RequestButton({ type, cooldown, onPick }: {
 
   return (
     <button
-      onClick={() => !isCooling && onPick(type.id)}
-      aria-disabled={isCooling}
+      onClick={() => !isDisabled && onPick(type.id)}
+      aria-disabled={isDisabled}
       style={{
         position: 'relative',
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
@@ -67,8 +69,8 @@ function RequestButton({ type, cooldown, onPick }: {
         borderRadius: 16, border,
         background: bg, color: fg,
         boxShadow: shadow,
-        cursor: isCooling ? 'default' : 'pointer',
-        pointerEvents: isCooling ? 'none' : 'auto',
+        cursor: isDisabled ? 'default' : 'pointer',
+        pointerEvents: isDisabled ? 'none' : 'auto',
         transition: 'transform .12s ease, background .25s ease, color .25s ease, box-shadow .25s ease',
         fontFamily: 'inherit', width: '100%',
       }}
@@ -101,11 +103,12 @@ function RequestButton({ type, cooldown, onPick }: {
 
 // ── Active request status card ─────────────────────────────────
 
-function CustomerStatusCard({ call, now, onCancel }: { call: Call; now: number; onCancel: () => void }) {
+function CustomerStatusCard({ call, now, cancelling, onCancel }: { call: Call; now: number; cancelling: boolean; onCancel: () => void }) {
   const isAssigned = call.status === 'assigned';
   const isUrgent = call.type === 'urgent_help';
   const Icon = ICON_BY_TYPE[call.type] ?? IcBell;
   const cardBg = isAssigned ? PALETTE.terracotta : PALETTE.rust;
+  const actionLabel = isAssigned ? 'No longer needed' : 'Cancel request';
   const eyebrow = isAssigned ? 'On the way' : (isUrgent ? 'Urgent · sent' : 'Request sent');
 
   return (
@@ -147,13 +150,12 @@ function CustomerStatusCard({ call, now, onCancel }: { call: Call; now: number; 
           </span>
           <span style={{ opacity: .75 }}>· typical wait 1–2m</span>
         </div>
-        {!isAssigned && (
-          <button onClick={onCancel} style={{
-            border: 'none', background: 'transparent', color: '#fff',
-            fontSize: 12, fontWeight: 600, padding: 0, cursor: 'pointer',
-            textDecoration: 'underline', textUnderlineOffset: 2,
-          }}>Cancel</button>
-        )}
+        <button onClick={onCancel} disabled={cancelling} style={{
+          border: 'none', background: 'transparent', color: '#fff',
+          fontSize: 12, fontWeight: 600, padding: 0, cursor: cancelling ? 'default' : 'pointer',
+          textDecoration: 'underline', textUnderlineOffset: 2,
+          opacity: cancelling ? 0.7 : 1,
+        }}>{actionLabel}</button>
       </div>
 
       {call.special_request && (
@@ -286,21 +288,27 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
   const [activeCalls, setActiveCalls] = useState<Call[]>([]);
   const [recentlyResolved, setRecentlyResolved] = useState(false);
   const [cooldownStarts, setCooldownStarts] = useState<Record<string, number>>({});
+  const [submittingTypeId, setSubmittingTypeId] = useState<string | null>(null);
+  const [cancellingCallId, setCancellingCallId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const now = useNow();
   const resolvedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const reloadActiveCalls = useCallback(async () => {
+    if (!table) return;
+    const calls = await getActiveCalls();
+    setActiveCalls(
+      mergeUniqueCalls(
+        asCallArray(calls).filter(c => c.table_id === table.objectId)
+      )
+    );
+  }, [table]);
+
   // Initial fetch of active calls for this table
   useEffect(() => {
     if (!table) return;
-    getActiveCalls()
-      .then(calls => setActiveCalls(
-        mergeUniqueCalls(
-          asCallArray(calls).filter(c => c.table_id === table.objectId)
-        )
-      ))
-      .catch(console.error);
-  }, [table]);
+    reloadActiveCalls().catch(console.error);
+  }, [reloadActiveCalls]);
 
   // WebSocket: track this table's calls
   useWebSocket(useCallback(({ type, payload }) => {
@@ -314,7 +322,7 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
       setRecentlyResolved(true);
       clearTimeout(resolvedTimerRef.current);
       resolvedTimerRef.current = setTimeout(() => setRecentlyResolved(false), 4000);
-    } else if (type === 'call_cancelled') {
+    } else if (type === 'call_cancelled' || type === 'call_no_longer_needed') {
       setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
     }
   }, [table]));
@@ -336,21 +344,24 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
     if (typeId === 'special') { setSheetOpen(true); return; }
     const requestType = REQUEST_TYPES.find(t => t.id === typeId);
     if (!requestType) return;
-    setCooldownStarts(c => ({ ...c, [typeId]: Date.now() }));
+    setSubmittingTypeId(typeId);
     try {
       await createCall({
         table_id: table.objectId,
         table_label: table.label,
         type: requestType.backendType,
       });
+      setCooldownStarts(c => ({ ...c, [typeId]: Date.now() }));
     } catch (e) {
       console.error(e);
+    } finally {
+      setSubmittingTypeId(current => current === typeId ? null : current);
     }
   };
 
   const onSubmitNote = async (note: string) => {
     if (!table) return;
-    setCooldownStarts(c => ({ ...c, special: Date.now() }));
+    setSubmittingTypeId('special');
     try {
       await createCall({
         table_id: table.objectId,
@@ -358,17 +369,38 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
         type: 'special',
         special_request: note,
       });
+      setCooldownStarts(c => ({ ...c, special: Date.now() }));
     } catch (e) {
       console.error(e);
+    } finally {
+      setSubmittingTypeId(current => current === 'special' ? null : current);
     }
   };
 
-  const onCancel = async (callId: string) => {
+  const onCancel = async (call: Call) => {
+    const message = call.status === 'assigned'
+      ? 'Staff may already be on the way. Mark this request as no longer needed?'
+      : call.type === 'urgent_help'
+        ? 'Urgent help was requested. Are you sure this is no longer needed?'
+        : 'Cancel this request?';
+
+    if (typeof window !== 'undefined' && !window.confirm(message)) return;
+
+    const callId = call.id;
+    if (cancellingCallId === callId) return;
+    setCancellingCallId(callId);
     try {
       await cancelCall(callId);
       setActiveCalls(cs => cs.filter(c => c.id !== callId));
     } catch (e) {
-      console.error(e);
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes('Call cannot be cancelled') || message.includes('already resolved') || message.includes('already cancelled')) {
+        await reloadActiveCalls().catch(console.error);
+      } else {
+        console.error(e);
+      }
+    } finally {
+      setCancellingCallId(current => current === callId ? null : current);
     }
   };
 
@@ -442,7 +474,8 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
       {activeCall && (
         <CustomerStatusCard
           call={activeCall} now={now}
-          onCancel={() => onCancel(activeCall.id)}
+          cancelling={cancellingCallId === activeCall.id}
+          onCancel={() => onCancel(activeCall)}
         />
       )}
 
@@ -456,6 +489,7 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
             key={type.id}
             type={type}
             cooldown={cooldowns[type.id] ?? 0}
+            busy={submittingTypeId === type.id}
             onPick={onPick}
           />
         ))}

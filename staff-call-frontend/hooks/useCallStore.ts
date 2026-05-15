@@ -35,6 +35,16 @@ function groupActive(activeCalls: Call[]): TableGroup[] {
   });
 }
 
+function getTerminalAt(call: Call): string | undefined {
+  return call.resolved_at ?? call.cancelled_at ?? call.no_longer_needed_at;
+}
+
+function getToastLabel(call: Call): string {
+  if (call.status === 'cancelled') return 'cancelled by guest';
+  if (call.status === 'no_longer_needed') return 'no longer needed';
+  return call.type.replace(/_/g, ' ');
+}
+
 export function useCallStore() {
   const [activeCalls, setActiveCalls]   = useState<Call[]>([]);
   const [resolvedCalls, setResolvedCalls] = useState<Call[]>([]);
@@ -57,19 +67,20 @@ export function useCallStore() {
     const id = setInterval(() => {
       const cutoff = Date.now() - RESOLVED_TTL_MS;
       setResolvedCalls(rs => rs.filter(r =>
-        new Date(r.resolved_at!).getTime() > cutoff
+        !!getTerminalAt(r) && new Date(getTerminalAt(r)!).getTime() > cutoff
       ));
     }, 5000);
     return () => clearInterval(id);
   }, []);
 
-  const pushToast = useCallback((call: Call) => {
+  const pushToast = useCallback((call: Call, silent = false) => {
     const toast: Toast = {
       id: call.id + '-toast-' + Date.now(),
       tableLabel: TABLE_BY_OBJECT_ID[call.table_id]?.label ?? call.table_label,
-      label: call.type.replace(/_/g, ' '),
+      label: getToastLabel(call),
       urgent: call.type === 'urgent_help',
       typeId: call.type,
+      silent,
     };
     setToasts(ts => [...ts, toast]);
     setTimeout(() => setToasts(ts => ts.filter(t => t.id !== toast.id)), 4500);
@@ -91,6 +102,12 @@ export function useCallStore() {
       setResolvedCalls(rs => mergeUniqueCalls([payload, ...rs]));
     } else if (type === 'call_cancelled') {
       setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
+      setResolvedCalls(rs => mergeUniqueCalls([payload, ...rs]));
+      pushToast(payload, true);
+    } else if (type === 'call_no_longer_needed') {
+      setActiveCalls(cs => cs.filter(c => c.id !== payload.id));
+      setResolvedCalls(rs => mergeUniqueCalls([payload, ...rs]));
+      pushToast(payload, true);
     }
   }, [pushToast]));
 

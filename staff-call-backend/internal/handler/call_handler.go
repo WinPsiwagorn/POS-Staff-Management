@@ -188,7 +188,7 @@ func (h *CallHandler) ResolveCall(
 	if call == nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 			"success": false,
-			"message": "Call already resolved",
+			"message": "Call already resolved or cancelled",
 		})
 	}
 
