@@ -108,7 +108,6 @@ function CustomerStatusCard({ call, now, cancelling, onCancel }: { call: Call; n
   const isUrgent = call.type === 'urgent_help';
   const Icon = ICON_BY_TYPE[call.type] ?? IcBell;
   const cardBg = isAssigned ? PALETTE.terracotta : PALETTE.rust;
-  const actionLabel = isAssigned ? 'No longer needed' : 'Cancel request';
   const eyebrow = isAssigned ? 'On the way' : (isUrgent ? 'Urgent · sent' : 'Request sent');
 
   return (
@@ -150,12 +149,14 @@ function CustomerStatusCard({ call, now, cancelling, onCancel }: { call: Call; n
           </span>
           <span style={{ opacity: .75 }}>· typical wait 1–2m</span>
         </div>
-        <button onClick={onCancel} disabled={cancelling} style={{
-          border: 'none', background: 'transparent', color: '#fff',
-          fontSize: 12, fontWeight: 600, padding: 0, cursor: cancelling ? 'default' : 'pointer',
-          textDecoration: 'underline', textUnderlineOffset: 2,
-          opacity: cancelling ? 0.7 : 1,
-        }}>{actionLabel}</button>
+        {!isAssigned && (
+          <button onClick={onCancel} disabled={cancelling} style={{
+            border: 'none', background: 'transparent', color: '#fff',
+            fontSize: 12, fontWeight: 600, padding: 0, cursor: cancelling ? 'default' : 'pointer',
+            textDecoration: 'underline', textUnderlineOffset: 2,
+            opacity: cancelling ? 0.7 : 1,
+          }}>Cancel request</button>
+        )}
       </div>
 
       {call.special_request && (
@@ -307,8 +308,23 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
   // Initial fetch of active calls for this table
   useEffect(() => {
     if (!table) return;
-    reloadActiveCalls().catch(console.error);
-  }, [reloadActiveCalls]);
+    let cancelled = false;
+
+    getActiveCalls()
+      .then(calls => {
+        if (cancelled) return;
+        setActiveCalls(
+          mergeUniqueCalls(
+            asCallArray(calls).filter(c => c.table_id === table.objectId)
+          )
+        );
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [table]);
 
   // WebSocket: track this table's calls
   useWebSocket(useCallback(({ type, payload }) => {
@@ -378,9 +394,9 @@ export default function CustomerPhone({ tableId }: { tableId: string }) {
   };
 
   const onCancel = async (call: Call) => {
-    const message = call.status === 'assigned'
-      ? 'Staff may already be on the way. Mark this request as no longer needed?'
-      : call.type === 'urgent_help'
+    if (call.status === 'assigned') return;
+
+    const message = call.type === 'urgent_help'
         ? 'Urgent help was requested. Are you sure this is no longer needed?'
         : 'Cancel this request?';
 

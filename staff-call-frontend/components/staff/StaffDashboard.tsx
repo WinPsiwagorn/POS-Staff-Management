@@ -337,7 +337,7 @@ function ResolvedLogRow({ call, now }: { call: Call; now: number }) {
           <span style={{ fontWeight: 600 }}>{typeDef?.label ?? call.type}</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: PALETTE.ink2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{statusLabel}</span>
           {call.special_request && (
-            <span style={{ color: PALETTE.ink2, fontStyle: 'italic', opacity: .85 }}>· "{call.special_request}"</span>
+            <span style={{ color: PALETTE.ink2, fontStyle: 'italic', opacity: .85 }}>· &quot;{call.special_request}&quot;</span>
           )}
         </div>
       </div>
@@ -646,7 +646,7 @@ function FocusRequestRow({ call, now, onAck, onResolve }: {
           marginTop: 10, padding: '8px 10px', borderRadius: 8,
           background: PALETTE.canvas, fontSize: 12.5, color: PALETTE.ink2,
           fontStyle: 'italic', border: '1px solid ' + PALETTE.hair,
-        }}>"{call.special_request}"</div>
+        }}>&quot;{call.special_request}&quot;</div>
       )}
     </div>
   );
